@@ -18,11 +18,13 @@ import {
   SingleHostDiscovery,
   UrlReaders,
 } from '@backstage/backend-common';
+import { PermissionClient } from '@backstage/permission-common';
 import { Config } from '@backstage/config';
 import app from './plugins/app';
 import auth from './plugins/auth';
 import catalog from './plugins/catalog';
 import scaffolder from './plugins/scaffolder';
+import permission from './plugins/permission';
 import proxy from './plugins/proxy';
 import techdocs from './plugins/techdocs';
 import search from './plugins/search';
@@ -32,6 +34,7 @@ function makeCreateEnv(config: Config) {
   const root = getRootLogger();
   const reader = UrlReaders.default({ logger: root, config });
   const discovery = SingleHostDiscovery.fromConfig(config);
+  const permissions = new PermissionClient({ discoveryApi: discovery });
 
   root.info(`Created UrlReader ${reader}`);
 
@@ -49,9 +52,7 @@ function makeCreateEnv(config: Config) {
       config,
       reader,
       discovery,
-      // TODO(authorization-framework): use PermissionClient once
-      // @backstage/permission-common is published.
-      permissions: {},
+      permissions,
     };
   };
 }
@@ -65,6 +66,7 @@ async function main() {
 
   const catalogEnv = useHotMemoize(module, () => createEnv('catalog'));
   const scaffolderEnv = useHotMemoize(module, () => createEnv('scaffolder'));
+  const permissionEnv = useHotMemoize(module, () => createEnv('permission'));
   const authEnv = useHotMemoize(module, () => createEnv('auth'));
   const proxyEnv = useHotMemoize(module, () => createEnv('proxy'));
   const techdocsEnv = useHotMemoize(module, () => createEnv('techdocs'));
@@ -74,6 +76,7 @@ async function main() {
   const apiRouter = Router();
   apiRouter.use('/catalog', await catalog(catalogEnv));
   apiRouter.use('/scaffolder', await scaffolder(scaffolderEnv));
+  apiRouter.use('/permission', await permission(permissionEnv));
   apiRouter.use('/auth', await auth(authEnv));
   apiRouter.use('/techdocs', await techdocs(techdocsEnv));
   apiRouter.use('/proxy', await proxy(proxyEnv));
